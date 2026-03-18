@@ -4,14 +4,32 @@
  */
 
 /**
+ * All supported math subjects
+ */
+export type Subject =
+  | 'addition'
+  | 'subtraction'
+  | 'multiplication'
+  | 'division'
+  | 'greater-than-lesser-than'
+  | 'fill-the-missing-number';
+
+/**
+ * How the player submits answers
+ */
+export type AnswerMode = 'multiple-choice' | 'fill-in-the-blank';
+
+/**
  * Marathon configuration parameters selected by the user
  */
 export interface MarathonConfig {
-  subject: 'addition' | 'subtraction' | 'multiplication' | 'division';
-  digitCountA: 1 | 2 | 3 | 4;
-  digitCountB: 1 | 2 | 3 | 4;
-  volume: 10 | 20 | 50 | 'endless';
-  speedLimit: 10 | 30 | 60; // seconds per question
+  subject: Subject;
+  digitCountA: number; // 1–6
+  digitCountB: number; // 1–6
+  volume: number | 'endless'; // 1–999 or 'endless'
+  speedLimit: number; // seconds per question, 5–300 multiples of 5
+  answerMode: AnswerMode;
+  allowDecimals?: boolean; // default false
 }
 
 /**
@@ -20,9 +38,12 @@ export interface MarathonConfig {
 export interface Question {
   operandA: number;
   operandB: number;
-  operation: 'addition' | 'subtraction' | 'multiplication' | 'division';
-  correctAnswer: number;
+  operation: Subject;
+  correctAnswer: number | '>' | '<';
   questionNumber: number; // 1-indexed
+  missingPosition?: 'operandA' | 'operandB' | 'result'; // fill-the-missing-number only
+  baseOperation?: 'addition' | 'subtraction' | 'multiplication' | 'division'; // fill-the-missing-number underlying op
+  choices?: Array<number | '>' | '<'>; // multiple-choice only, length 4 (or 2 for GT/LT)
 }
 
 /**
@@ -30,7 +51,7 @@ export interface Question {
  */
 export interface QuestionResult {
   question: Question;
-  userAnswer: number;
+  userAnswer: number | string;
   isCorrect: boolean;
   pointsAwarded: number; // 0, 0.5, or 1
   answeredAfterExpiry: boolean;

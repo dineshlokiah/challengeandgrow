@@ -63,89 +63,10 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
     setIsPaused(false);
   };
 
-  // Handle answer submission
+  // Handle answer submission from the text input form
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!currentQuestion || userAnswer.trim() === '') {
-      return;
-    }
-
-    const numericAnswer = parseFloat(userAnswer);
-    
-    // Validate numeric input
-    if (isNaN(numericAnswer)) {
-      setFeedback('incorrect');
-      setUserAnswer('');
-      // Trigger haptic feedback for incorrect answer (where supported)
-      if ('vibrate' in navigator) {
-        navigator.vibrate(200); // 200ms vibration
-      }
-      setTimeout(() => setFeedback(null), 1000);
-      return;
-    }
-
-    const isCorrect = numericAnswer === currentQuestion.correctAnswer;
-    const timeSpent = (Date.now() - currentQuestionStartTimeRef.current) / 1000;
-    const pointsAwarded = scoringEngineRef.current.scoreAnswer(isCorrect, timerExpired);
-    
-    // Trigger haptic feedback for incorrect answer (where supported)
-    if (!isCorrect && 'vibrate' in navigator) {
-      navigator.vibrate(200); // 200ms vibration
-    }
-
-    // Create question result
-    const result: QuestionResult = {
-      question: currentQuestion,
-      userAnswer: numericAnswer,
-      isCorrect,
-      pointsAwarded,
-      answeredAfterExpiry: timerExpired,
-      timeSpent
-    };
-
-    // Update question history
-    const updatedHistory = [...questionHistory, result];
-    setQuestionHistory(updatedHistory);
-
-    // Show feedback
-    setFeedback(isCorrect ? 'correct' : 'incorrect');
-    
-    // Clear input
-    setUserAnswer('');
-
-    // Check if marathon is complete
-    const isComplete = config.volume !== 'endless' && updatedHistory.length >= config.volume;
-    
-    if (isComplete) {
-      // Marathon complete - generate results
-      setTimeout(() => {
-        const totalScore = scoringEngineRef.current.calculateTotalScore(updatedHistory);
-        const percentage = scoringEngineRef.current.calculatePercentage(totalScore, updatedHistory.length);
-        const totalTime = (Date.now() - startTimeRef.current) / 1000;
-
-        const results: MarathonResults = {
-          config,
-          questionResults: updatedHistory,
-          totalScore,
-          percentage,
-          totalTime,
-          completedAt: new Date()
-        };
-
-        onComplete(results);
-      }, 1000);
-    } else {
-      // Advance to next question
-      setTimeout(() => {
-        setFeedback(null);
-        setTimerExpired(false);
-        timerKeyRef.current += 1;
-        const nextQuestion = questionGeneratorRef.current.generateQuestion(config);
-        setCurrentQuestion(nextQuestion);
-        currentQuestionStartTimeRef.current = Date.now();
-      }, 1000);
-    }
+    submitAnswer(userAnswer);
   };
 
   // Handle end marathon for endless mode
@@ -182,7 +103,80 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
       case 'subtraction': return '-';
       case 'multiplication': return '×';
       case 'division': return '÷';
+      case 'greater-than-lesser-than': return '?';
+      case 'fill-the-missing-number': return '?';
       default: return '';
+    }
+  };
+
+  // Submit an answer value (used by both form submit and button tap)
+  const submitAnswer = (answer: string) => {
+    if (!currentQuestion || answer.trim() === '') return;
+
+    // Task 6.4: handle string answers ('>' / '<') vs numeric
+    const isCorrect =
+      typeof currentQuestion.correctAnswer === 'string'
+        ? answer === currentQuestion.correctAnswer
+        : parseFloat(answer) === currentQuestion.correctAnswer;
+
+    // For numeric fill-in-the-blank, reject non-numeric input
+    if (typeof currentQuestion.correctAnswer !== 'string' && isNaN(parseFloat(answer))) {
+      setFeedback('incorrect');
+      setUserAnswer('');
+      if ('vibrate' in navigator) navigator.vibrate(200);
+      setTimeout(() => setFeedback(null), 1000);
+      return;
+    }
+
+    const timeSpent = (Date.now() - currentQuestionStartTimeRef.current) / 1000;
+    const pointsAwarded = scoringEngineRef.current.scoreAnswer(isCorrect, timerExpired);
+
+    if (!isCorrect && 'vibrate' in navigator) navigator.vibrate(200);
+
+    const result: QuestionResult = {
+      question: currentQuestion,
+      userAnswer: answer,
+      isCorrect,
+      pointsAwarded,
+      answeredAfterExpiry: timerExpired,
+      timeSpent
+    };
+
+    const updatedHistory = [...questionHistory, result];
+    setQuestionHistory(updatedHistory);
+    setFeedback(isCorrect ? 'correct' : 'incorrect');
+    setUserAnswer('');
+
+    const isComplete = config.volume !== 'endless' && updatedHistory.length >= config.volume;
+
+    if (isComplete) {
+      setTimeout(() => {
+        const totalScore = scoringEngineRef.current.calculateTotalScore(updatedHistory);
+        const percentage = scoringEngineRef.current.calculatePercentage(totalScore, updatedHistory.length);
+        const totalTime = (Date.now() - startTimeRef.current) / 1000;
+        onComplete({ config, questionResults: updatedHistory, totalScore, percentage, totalTime, completedAt: new Date() });
+      }, 1000);
+    } else {
+      setTimeout(() => {
+        setFeedback(null);
+        setTimerExpired(false);
+        timerKeyRef.current += 1;
+        const nextQuestion = questionGeneratorRef.current.generateQuestion(config);
+        setCurrentQuestion(nextQuestion);
+        currentQuestionStartTimeRef.current = Date.now();
+      }, 1000);
+    }
+  };
+
+  // Compute the full equation result for fill-the-missing-number display
+  const computeFillResult = (q: Question): number => {
+    const op = q.baseOperation ?? 'addition';
+    switch (op) {
+      case 'addition': return Math.round((q.operandA + q.operandB) * 100) / 100;
+      case 'subtraction': return Math.round((q.operandA - q.operandB) * 100) / 100;
+      case 'multiplication': return Math.round((q.operandA * q.operandB) * 100) / 100;
+      case 'division': return q.operandB !== 0 ? Math.round((q.operandA / q.operandB) * 100) / 100 : 0;
+      default: return 0;
     }
   };
 
@@ -255,68 +249,180 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
           marginTop: '32px',
           marginBottom: '32px'
         }}>
-          <div style={{
-            fontSize: '48px',
-            fontFamily: 'monospace',
-            textAlign: 'center',
-            lineHeight: '1.5',
-            letterSpacing: '4px'
-          }}>
-            <span>{currentQuestion.operandA}</span>
-            <span style={{ margin: '0 16px' }}>{getOperationSymbol(currentQuestion.operation)}</span>
-            <span>{currentQuestion.operandB}</span>
-            <span style={{ margin: '0 16px' }}>=</span>
-            <span style={{ color: '#FF8C00' }}>?</span>
-          </div>
+          {/* Task 6.1: GT/LT question display */}
+          {currentQuestion.operation === 'greater-than-lesser-than' ? (
+            <div style={{
+              fontSize: '48px',
+              fontFamily: 'monospace',
+              textAlign: 'center',
+              lineHeight: '1.5',
+              letterSpacing: '4px'
+            }}>
+              <span>{currentQuestion.operandA}</span>
+              <span style={{ margin: '0 16px', color: '#FF8C00' }}>___</span>
+              <span>{currentQuestion.operandB}</span>
+            </div>
+          ) : currentQuestion.operation === 'fill-the-missing-number' ? (
+            /* Task 6.2: Fill the Missing Number display */
+            <div style={{
+              fontSize: '48px',
+              fontFamily: 'monospace',
+              textAlign: 'center',
+              lineHeight: '1.5',
+              letterSpacing: '4px'
+            }}>
+              {currentQuestion.missingPosition === 'operandA' ? (
+                <>
+                  <span style={{ color: '#FF8C00' }}>__</span>
+                  <span style={{ margin: '0 16px' }}>{getOperationSymbol(currentQuestion.baseOperation ?? 'addition')}</span>
+                  <span>{currentQuestion.operandB}</span>
+                  <span style={{ margin: '0 16px' }}>=</span>
+                  <span>{computeFillResult(currentQuestion)}</span>
+                </>
+              ) : currentQuestion.missingPosition === 'operandB' ? (
+                <>
+                  <span>{currentQuestion.operandA}</span>
+                  <span style={{ margin: '0 16px' }}>{getOperationSymbol(currentQuestion.baseOperation ?? 'addition')}</span>
+                  <span style={{ color: '#FF8C00' }}>__</span>
+                  <span style={{ margin: '0 16px' }}>=</span>
+                  <span>{computeFillResult(currentQuestion)}</span>
+                </>
+              ) : (
+                /* missingPosition === 'result' or undefined */
+                <>
+                  <span>{currentQuestion.operandA}</span>
+                  <span style={{ margin: '0 16px' }}>{getOperationSymbol(currentQuestion.baseOperation ?? 'addition')}</span>
+                  <span>{currentQuestion.operandB}</span>
+                  <span style={{ margin: '0 16px' }}>=</span>
+                  <span style={{ color: '#FF8C00' }}>__</span>
+                </>
+              )}
+            </div>
+          ) : (
+            /* Default: A op B = ? */
+            <div style={{
+              fontSize: '48px',
+              fontFamily: 'monospace',
+              textAlign: 'center',
+              lineHeight: '1.5',
+              letterSpacing: '4px'
+            }}>
+              <span>{currentQuestion.operandA}</span>
+              <span style={{ margin: '0 16px' }}>{getOperationSymbol(currentQuestion.operation)}</span>
+              <span>{currentQuestion.operandB}</span>
+              <span style={{ margin: '0 16px' }}>=</span>
+              <span style={{ color: '#FF8C00' }}>?</span>
+            </div>
+          )}
 
-          {/* Answer input form */}
-          <form onSubmit={handleSubmit} style={{ marginTop: '32px' }}>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={userAnswer}
-              onChange={(e) => setUserAnswer(e.target.value)}
-              placeholder="Your answer"
-              disabled={feedback !== null}
-              style={{
-                width: '100%',
-                padding: '16px',
-                fontSize: '32px',
-                fontFamily: 'monospace',
-                textAlign: 'center',
-                border: 'none',
-                borderRadius: '8px',
-                backgroundColor: feedback === 'correct' ? '#2ECC71' : feedback === 'incorrect' ? '#E74C3C' : '#FFFFFF',
-                color: feedback ? '#FFFFFF' : '#2C3E50',
-                transition: 'background-color 0.3s ease',
-                marginBottom: '16px'
-              }}
-              autoFocus
-            />
-            
-            <button
-              type="submit"
-              disabled={feedback !== null}
-              style={{
-                width: '100%',
-                minHeight: '44px',
-                minWidth: '44px',
-                padding: '16px',
-                fontSize: '18px',
-                fontWeight: 'bold',
-                backgroundColor: '#FF8C00',
-                color: '#FFFFFF',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: feedback !== null ? 'not-allowed' : 'pointer',
-                opacity: feedback !== null ? 0.6 : 1,
-                transition: 'opacity 0.3s ease'
-              }}
-            >
-              Submit Answer
-            </button>
-          </form>
+          {/* Answer input — switches on operation and answerMode */}
+          <div style={{ marginTop: '32px' }}>
+            {/* Task 6.1: GT/LT always uses two symbol buttons */}
+            {currentQuestion.operation === 'greater-than-lesser-than' ? (
+              <div style={{ display: 'flex', gap: '16px' }}>
+                {(['>', '<'] as const).map((symbol) => (
+                  <button
+                    key={symbol}
+                    disabled={feedback !== null}
+                    onClick={() => submitAnswer(symbol)}
+                    style={{
+                      flex: 1,
+                      minHeight: '80px',
+                      fontSize: '48px',
+                      fontWeight: 'bold',
+                      fontFamily: 'monospace',
+                      backgroundColor: feedback === 'correct' && userAnswer === symbol ? '#2ECC71'
+                        : feedback === 'incorrect' && userAnswer === symbol ? '#E74C3C'
+                        : '#FF8C00',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '12px',
+                      cursor: feedback !== null ? 'not-allowed' : 'pointer',
+                      opacity: feedback !== null ? 0.6 : 1,
+                      transition: 'opacity 0.3s ease'
+                    }}
+                  >
+                    {symbol}
+                  </button>
+                ))}
+              </div>
+            ) : config.answerMode === 'multiple-choice' && currentQuestion.choices ? (
+              /* Task 6.3: Multiple-choice buttons */
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {currentQuestion.choices.map((choice, idx) => (
+                  <button
+                    key={idx}
+                    disabled={feedback !== null}
+                    onClick={() => submitAnswer(String(choice))}
+                    style={{
+                      minHeight: '72px',
+                      fontSize: '32px',
+                      fontWeight: 'bold',
+                      fontFamily: 'monospace',
+                      backgroundColor: '#34495E',
+                      color: '#FFFFFF',
+                      border: '3px solid #FF8C00',
+                      borderRadius: '12px',
+                      cursor: feedback !== null ? 'not-allowed' : 'pointer',
+                      opacity: feedback !== null ? 0.6 : 1,
+                      transition: 'opacity 0.3s ease'
+                    }}
+                  >
+                    {choice}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              /* fill-in-the-blank: existing text input + Submit */
+              <form onSubmit={handleSubmit}>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={userAnswer}
+                  onChange={(e) => setUserAnswer(e.target.value)}
+                  placeholder="Your answer"
+                  disabled={feedback !== null}
+                  style={{
+                    width: '100%',
+                    padding: '16px',
+                    fontSize: '32px',
+                    fontFamily: 'monospace',
+                    textAlign: 'center',
+                    border: 'none',
+                    borderRadius: '8px',
+                    backgroundColor: feedback === 'correct' ? '#2ECC71' : feedback === 'incorrect' ? '#E74C3C' : '#FFFFFF',
+                    color: feedback ? '#FFFFFF' : '#2C3E50',
+                    transition: 'background-color 0.3s ease',
+                    marginBottom: '16px',
+                    boxSizing: 'border-box'
+                  }}
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={feedback !== null}
+                  style={{
+                    width: '100%',
+                    minHeight: '44px',
+                    minWidth: '44px',
+                    padding: '16px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    backgroundColor: '#FF8C00',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: feedback !== null ? 'not-allowed' : 'pointer',
+                    opacity: feedback !== null ? 0.6 : 1,
+                    transition: 'opacity 0.3s ease'
+                  }}
+                >
+                  Submit Answer
+                </button>
+              </form>
+            )}
+          </div>
 
           {/* Feedback message */}
           {feedback && (
@@ -327,7 +433,7 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
               fontWeight: 'bold',
               color: feedback === 'correct' ? '#2ECC71' : '#FFFFFF'
             }}>
-              {feedback === 'correct' ? '✓ Correct!' : (Math.random() > 0.5 ? 'Try Again!' : 'Oops!')}
+              {feedback === 'correct' ? '✓ Correct!' : 'Oops!'}
             </div>
           )}
         </div>

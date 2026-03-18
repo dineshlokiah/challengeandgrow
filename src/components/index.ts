@@ -3,6 +3,7 @@
  */
 
 export { Timer } from './Timer';
+export { Stepper } from './Stepper';
 export { default as ConfigurationSuite } from './ConfigurationSuite';
 export { MarathonInterface } from './MarathonInterface';
 export { ResultGenerator } from './ResultGenerator';
