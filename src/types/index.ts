@@ -36,6 +36,7 @@ export interface MarathonConfig {
   speedLimit: number; // seconds per question, 5–300 multiples of 5
   answerMode: AnswerMode;
   allowDecimals?: boolean; // default false
+  fillOperations?: Array<'addition' | 'subtraction' | 'multiplication' | 'division'>; // allowed operations for fill-the-missing-number
 }
 
 /**

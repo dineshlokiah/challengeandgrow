@@ -29,30 +29,30 @@ const OPERATION_COLORS: Record<Subject, string> = {
   'prime-or-not':             '#00BCD4',
 };
 
-// Step indices — each section owns one step number
 const STEPS = {
   SUBJECT:  0,
-  DIGIT_A:  1,
-  DIGIT_B:  2,
-  VOLUME:   3,
-  SPEED:    4,
-  ANSWER:   5,
-  DECIMALS: 6,
+  FILL_OPS: 1,
+  DIGIT_A:  2,
+  DIGIT_B:  3,
+  VOLUME:   4,
+  SPEED:    5,
+  ANSWER:   6,
+  DECIMALS: 7,
 } as const;
 
 const SUBJECT_OPTIONS: { value: Subject; label: string; icon: string }[] = [
-  { value: 'addition',                 label: 'Addition',    icon: '🧱' },
-  { value: 'subtraction',              label: 'Subtraction', icon: '✂️' },
-  { value: 'multiplication',           label: 'Multiply',    icon: '⭐' },
-  { value: 'division',                 label: 'Division',    icon: '🍕' },
+  { value: 'addition',                 label: 'Addition',    icon: '➕' },
+  { value: 'subtraction',              label: 'Subtraction', icon: '➖' },
+  { value: 'multiplication',           label: 'Multiply',    icon: '✖️' },
+  { value: 'division',                 label: 'Division',    icon: '➗' },
   { value: 'greater-than-lesser-than', label: 'Compare',     icon: '⚖️' },
-  { value: 'fill-the-missing-number',  label: 'Fill Gap',    icon: '🔍' },
-  { value: 'counting',                 label: 'Counting',    icon: '🔢' },
+  { value: 'fill-the-missing-number',  label: 'Fill Gap',    icon: '🧩' },
+  { value: 'counting',                 label: 'Counting',    icon: '🧮' },
   { value: 'number-bonds',             label: 'Number Bonds',icon: '🔗' },
-  { value: 'skip-counting',            label: 'Skip Count',  icon: '🦘' },
+  { value: 'skip-counting',            label: 'Skip Count',  icon: '⏭️' },
   { value: 'rounding',                 label: 'Rounding',    icon: '🎯' },
-  { value: 'even-or-odd',              label: 'Even or Odd', icon: '🔢' },
-  { value: 'prime-or-not',             label: 'Prime or Not',icon: '🔑' },
+  { value: 'even-or-odd',              label: 'Even or Odd', icon: '🎲' },
+  { value: 'prime-or-not',             label: 'Prime or Not',icon: '🔎' },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -391,6 +391,9 @@ const isAnswerModeHidden = (s: Subject | null) =>
 
 const ConfigurationSuite: React.FC<ConfigurationSuiteProps> = ({ onStartMarathon }) => {
   const [subject, setSubject] = useState<Subject | null>(null);
+  const [fillOperations, setFillOperations] = useState<Set<'addition' | 'subtraction' | 'multiplication' | 'division'>>(
+    new Set(['addition', 'subtraction', 'multiplication', 'division'])
+  );
   const [revealedStep, setRevealedStep] = useState<number>(0);
 
   // Digit counts
@@ -420,6 +423,7 @@ const ConfigurationSuite: React.FC<ConfigurationSuiteProps> = ({ onStartMarathon
 
   const isConfigComplete =
     subject !== null &&
+    (subject !== 'fill-the-missing-number' || fillOperations.size > 0) &&
     (isDigitsHidden(subject) || (digitCountA !== null && digitCountB !== null)) &&
     volume !== null &&
     speedLimit !== null &&
@@ -435,6 +439,7 @@ const ConfigurationSuite: React.FC<ConfigurationSuiteProps> = ({ onStartMarathon
         speedLimit: speedLimit!,
         answerMode: answerMode ?? 'multiple-choice',
         allowDecimals,
+        ...(subject === 'fill-the-missing-number' && { fillOperations: Array.from(fillOperations) }),
       });
     }
   };
@@ -479,6 +484,9 @@ const ConfigurationSuite: React.FC<ConfigurationSuiteProps> = ({ onStartMarathon
                 setAnswerMode('multiple-choice');
               }
               let nextStep = STEPS.SUBJECT + 1;
+              if (s !== 'fill-the-missing-number' && nextStep === STEPS.FILL_OPS) {
+                 nextStep = STEPS.DIGIT_A;
+              }
               if (isDigitsHidden(s)) {
                  nextStep = Math.max(nextStep, STEPS.VOLUME);
               }
@@ -486,6 +494,33 @@ const ConfigurationSuite: React.FC<ConfigurationSuiteProps> = ({ onStartMarathon
             }}
           />
         </div>
+
+        {/* Fill Operations */}
+        {subject === 'fill-the-missing-number' && (
+          <SettingsCard label="Allowed Operations" visible={revealedStep >= STEPS.FILL_OPS} accentColor={accentColor}>
+            <div style={{ ...styles.buttonGrid, gridTemplateColumns: '1fr 1fr' }}>
+              {(['addition', 'subtraction', 'multiplication', 'division'] as const).map((op) => (
+                <NeumorphicButton
+                  key={op}
+                  onClick={() => {
+                    const next = new Set(fillOperations);
+                    if (next.has(op)) next.delete(op);
+                    else next.add(op);
+                    setFillOperations(next);
+                    setRevealedStep(prev => Math.max(prev, STEPS.DIGIT_A));
+                  }}
+                  style={{
+                    ...styles.optionButton,
+                    ...(fillOperations.has(op) ? styles.selected : {})
+                  }}
+                  aria-pressed={fillOperations.has(op)}
+                >
+                  {op.charAt(0).toUpperCase() + op.slice(1)}
+                </NeumorphicButton>
+              ))}
+            </div>
+          </SettingsCard>
+        )}
 
         {/* Number A Digits */}
         {!isDigitsHidden(subject) && (

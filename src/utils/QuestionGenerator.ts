@@ -158,8 +158,9 @@ export class QuestionGenerator {
       }
 
       case 'fill-the-missing-number': {
-        // Generate a base arithmetic question using one of the 4 operations
-        const baseOps = ['addition', 'subtraction', 'multiplication', 'division'] as const;
+        // Generate a base arithmetic question using one of the allowed operations
+        const defaultBaseOps = ['addition', 'subtraction', 'multiplication', 'division'] as const;
+        const baseOps = (config.fillOperations && config.fillOperations.length > 0) ? config.fillOperations : defaultBaseOps;
         const baseOp = baseOps[Math.floor(Math.random() * baseOps.length)];
 
         if (baseOp === 'division') {

@@ -44,6 +44,7 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
   const timerKeyRef = useRef<number>(0);
   const compareIconRef = useRef<string>('🍎');
   const countingIconRef = useRef<string>('🍎');
+  const [countedIndices, setCountedIndices] = useState<Set<number>>(new Set());
 
   // Initialize first question
   useEffect(() => {
@@ -207,6 +208,7 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
       setTimeout(() => {
         setFeedback(null);
         setTimerExpired(false);
+        setCountedIndices(new Set()); // Reset counted indices
         timerKeyRef.current += 1;
         const nextQuestion = questionGeneratorRef.current.generateQuestion(config);
         setCurrentQuestion(nextQuestion);
@@ -238,10 +240,47 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
 
   const renderIconGrid = (count: number, icon: string) => {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px', justifyItems: 'center' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'clamp(2px, 1vw, 4px)', justifyItems: 'center' }}>
         {Array.from({ length: count }).map((_, i) => (
-          <span key={i} style={{ fontSize: '28px' }}>{icon}</span>
+          <span key={i} style={{ fontSize: 'clamp(18px, 5vw, 28px)' }}>{icon}</span>
         ))}
+      </div>
+    );
+  };
+
+  const handleIconClick = (index: number) => {
+    if (countedIndices.has(index)) return;
+    setCountedIndices(prev => new Set(prev).add(index));
+  };
+
+  const renderInteractiveIconGrid = (count: number, icon: string) => {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', justifyItems: 'center' }}>
+        {Array.from({ length: count }).map((_, i) => {
+          const isCounted = countedIndices.has(i);
+          return (
+            <button 
+              key={i}
+              onClick={() => handleIconClick(i)}
+              disabled={isCounted || feedback !== null}
+              style={{ 
+                fontSize: 'clamp(32px, 8vw, 48px)',
+                background: 'none',
+                border: 'none',
+                padding: '8px',
+                cursor: isCounted || feedback !== null ? 'default' : 'pointer',
+                opacity: isCounted ? 0.4 : 1,
+                transform: isCounted ? 'scale(0.9)' : 'scale(1)',
+                transition: 'all 0.2s ease',
+                borderRadius: '50%',
+                backgroundColor: isCounted ? 'rgba(46, 204, 113, 0.2)' : 'transparent',
+                boxShadow: isCounted ? '0 0 0 4px rgba(46, 204, 113, 0.5)' : 'none'
+              }}
+            >
+              {icon}
+            </button>
+          );
+        })}
       </div>
     );
   };
@@ -334,8 +373,8 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
           {/* Custom renderings for new subjects */}
           {currentQuestion.operation === 'counting' ? (
              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>How many?</div>
-                {renderIconGrid(currentQuestion.correctAnswer as number, countingIconRef.current)}
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>Tap to count!</div>
+                {renderInteractiveIconGrid(currentQuestion.correctAnswer as number, countingIconRef.current)}
              </div>
           ) : currentQuestion.operation === 'number-bonds' ? (
              <div style={{ fontSize: '48px', fontFamily: 'monospace', textAlign: 'center', lineHeight: '1.5', letterSpacing: '4px' }}>
@@ -366,9 +405,11 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
               display: 'grid', 
               gridTemplateColumns: '1fr auto 1fr', 
               gridTemplateRows: '1fr auto', 
-              gap: '16px 24px',
+              gap: 'clamp(8px, 2vw, 16px) clamp(8px, 2vw, 24px)',
               justifyItems: 'center',
-              alignItems: 'end'
+              alignItems: 'end',
+              width: '100%',
+              overflow: 'hidden'
             }}>
               {/* Icons Row */}
               <div style={{ gridColumn: 1, gridRow: 1 }}>
@@ -381,10 +422,10 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
                 gridRow: '1 / span 2', 
                 display: 'flex', 
                 alignItems: 'center', 
-                fontSize: '48px', 
+                fontSize: 'clamp(24px, 6vw, 48px)', 
                 color: '#FF8C00', 
                 fontWeight: 'bold', 
-                letterSpacing: '4px' 
+                letterSpacing: 'clamp(1px, 1vw, 4px)' 
               }}>
                 ___
               </div>
@@ -595,6 +636,20 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
               </form>
             )}
           </div>
+
+          {/* Interactive counting tracker */}
+          {currentQuestion.operation === 'counting' && (
+            <div style={{
+              marginTop: '24px',
+              textAlign: 'center',
+              fontSize: '28px',
+              fontWeight: 'bold',
+              color: countedIndices.size > 0 ? '#2ECC71' : 'rgba(255,255,255,0.3)',
+              transition: 'color 0.3s ease'
+            }}>
+              Counted: {countedIndices.size}
+            </div>
+          )}
 
           {/* Feedback message */}
           {feedback && (
