@@ -2,7 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Timer } from './Timer';
 import { QuestionGenerator } from '../utils/QuestionGenerator';
 import { ScoringEngine } from '../utils/ScoringEngine';
-import type { MarathonConfig, Question, QuestionResult, MarathonResults } from '../types';
+import type { MarathonConfig, Question, QuestionResult, MarathonResults, SavedSession } from '../types';
+import { marathonStore } from '../store/MarathonStore';
+
+const COMPARE_ICONS = ['🍎', '🍦', '⭐', '🐶', '🌸'];
+const COUNTING_ICONS = ['🍎', '🍦', '⭐', '🐶', '🌸', '🚗', '🦋', '🐸'];
 
 /**
  * MarathonInterface Component
@@ -38,15 +42,54 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
   const startTimeRef = useRef<number>(Date.now());
   const currentQuestionStartTimeRef = useRef<number>(Date.now());
   const timerKeyRef = useRef<number>(0);
+  const compareIconRef = useRef<string>('🍎');
+  const countingIconRef = useRef<string>('🍎');
 
   // Initialize first question
   useEffect(() => {
+    const savedSession = marathonStore.getSavedSession();
     questionGeneratorRef.current.reset();
-    const firstQuestion = questionGeneratorRef.current.generateQuestion(config);
-    setCurrentQuestion(firstQuestion);
-    startTimeRef.current = Date.now();
-    currentQuestionStartTimeRef.current = Date.now();
+
+    if (savedSession) {
+      setQuestionHistory(savedSession.questionHistory);
+      for(let i=0; i<savedSession.questionHistory.length; i++) {
+        questionGeneratorRef.current.generateQuestion(config);
+      }
+      const nextQuestion = questionGeneratorRef.current.generateQuestion(config);
+      setCurrentQuestion(nextQuestion);
+      startTimeRef.current = savedSession.savedAt;
+      currentQuestionStartTimeRef.current = Date.now();
+      if (nextQuestion.operation === 'greater-than-lesser-than') {
+        compareIconRef.current = COMPARE_ICONS[Math.floor(Math.random() * COMPARE_ICONS.length)];
+      }
+      if (nextQuestion.operation === 'counting') {
+        countingIconRef.current = COUNTING_ICONS[Math.floor(Math.random() * COUNTING_ICONS.length)];
+      }
+    } else {
+      const firstQuestion = questionGeneratorRef.current.generateQuestion(config);
+      setCurrentQuestion(firstQuestion);
+      startTimeRef.current = Date.now();
+      currentQuestionStartTimeRef.current = Date.now();
+      if (firstQuestion.operation === 'greater-than-lesser-than') {
+        compareIconRef.current = COMPARE_ICONS[Math.floor(Math.random() * COMPARE_ICONS.length)];
+      }
+      if (firstQuestion.operation === 'counting') {
+        countingIconRef.current = COUNTING_ICONS[Math.floor(Math.random() * COUNTING_ICONS.length)];
+      }
+    }
   }, [config]);
+
+  const writeSession = (history: QuestionResult[]) => {
+    const totalScore = scoringEngineRef.current.calculateTotalScore(history);
+    const session: SavedSession = {
+      config,
+      questionHistory: history,
+      currentQuestionIndex: history.length,
+      currentScore: totalScore,
+      savedAt: Date.now()
+    };
+    localStorage.setItem('challengeandgrow_saved_session', JSON.stringify(session));
+  };
 
   // Handle timer expiration
   const handleTimeExpired = () => {
@@ -56,6 +99,7 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
   // Handle pause button click
   const handlePause = () => {
     setIsPaused(true);
+    writeSession(questionHistory);
   };
 
   // Handle resume button click
@@ -84,6 +128,7 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
       completedAt: new Date()
     };
 
+    localStorage.removeItem('challengeandgrow_saved_session');
     onComplete(results);
   };
 
@@ -146,6 +191,7 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
     setQuestionHistory(updatedHistory);
     setFeedback(isCorrect ? 'correct' : 'incorrect');
     setUserAnswer('');
+    writeSession(updatedHistory);
 
     const isComplete = config.volume !== 'endless' && updatedHistory.length >= config.volume;
 
@@ -154,6 +200,7 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
         const totalScore = scoringEngineRef.current.calculateTotalScore(updatedHistory);
         const percentage = scoringEngineRef.current.calculatePercentage(totalScore, updatedHistory.length);
         const totalTime = (Date.now() - startTimeRef.current) / 1000;
+        localStorage.removeItem('challengeandgrow_saved_session');
         onComplete({ config, questionResults: updatedHistory, totalScore, percentage, totalTime, completedAt: new Date() });
       }, 1000);
     } else {
@@ -164,6 +211,12 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
         const nextQuestion = questionGeneratorRef.current.generateQuestion(config);
         setCurrentQuestion(nextQuestion);
         currentQuestionStartTimeRef.current = Date.now();
+        if (nextQuestion.operation === 'greater-than-lesser-than') {
+          compareIconRef.current = COMPARE_ICONS[Math.floor(Math.random() * COMPARE_ICONS.length)];
+        }
+        if (nextQuestion.operation === 'counting') {
+          countingIconRef.current = COUNTING_ICONS[Math.floor(Math.random() * COUNTING_ICONS.length)];
+        }
       }, 1000);
     }
   };
@@ -180,6 +233,19 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
     }
   };
 
+  const correctAnswersCount = questionHistory.filter(q => q.isCorrect).length;
+  const isSingleDigitCompare = currentQuestion?.operation === 'greater-than-lesser-than' && currentQuestion.operandA >= 1 && currentQuestion.operandA <= 9 && currentQuestion.operandB >= 1 && currentQuestion.operandB <= 9;
+
+  const renderIconGrid = (count: number, icon: string) => {
+    return (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '4px', justifyItems: 'center' }}>
+        {Array.from({ length: count }).map((_, i) => (
+          <span key={i} style={{ fontSize: '28px' }}>{icon}</span>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div 
       className="marathon-interface"
@@ -194,6 +260,22 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
         fontFamily: 'Quicksand, sans-serif'
       }}
     >
+      {/* Live Score Counter */}
+      <div style={{ width: '100%', maxWidth: '600px', display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
+        <div style={{
+          backgroundColor: 'rgba(255, 255, 255, 0.1)',
+          padding: '8px 16px',
+          borderRadius: '20px',
+          fontSize: '18px',
+          fontWeight: 'bold',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span style={{ color: '#2ECC71' }}>✓</span> {correctAnswersCount} / {questionHistory.length}
+        </div>
+      </div>
+
       {/* Progress indicator */}
       <div style={{ width: '100%', maxWidth: '600px', marginBottom: '24px' }}>
         {config.volume !== 'endless' ? (
@@ -249,8 +331,78 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
           marginTop: '32px',
           marginBottom: '32px'
         }}>
-          {/* Task 6.1: GT/LT question display */}
-          {currentQuestion.operation === 'greater-than-lesser-than' ? (
+          {/* Custom renderings for new subjects */}
+          {currentQuestion.operation === 'counting' ? (
+             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                <div style={{ fontSize: '24px', fontWeight: 'bold' }}>How many?</div>
+                {renderIconGrid(currentQuestion.correctAnswer as number, countingIconRef.current)}
+             </div>
+          ) : currentQuestion.operation === 'number-bonds' ? (
+             <div style={{ fontSize: '48px', fontFamily: 'monospace', textAlign: 'center', lineHeight: '1.5', letterSpacing: '4px' }}>
+               <span>{currentQuestion.operandA}</span>
+               <span style={{ margin: '0 16px' }}>+</span>
+               <span style={{ color: '#FF8C00' }}>?</span>
+               <span style={{ margin: '0 16px' }}>=</span>
+               <span>{currentQuestion.operandB}</span>
+             </div>
+          ) : currentQuestion.operation === 'skip-counting' ? (
+             <div style={{ fontSize: '48px', fontFamily: 'monospace', textAlign: 'center', lineHeight: '1.5', letterSpacing: '2px' }}>
+                {currentQuestion.sequence?.map((val, idx) => (
+                  <span key={idx} style={{ color: val === '?' ? '#FF8C00' : '#FFFFFF' }}>
+                    {val}{idx < 4 ? ', ' : ''}
+                  </span>
+                ))}
+             </div>
+          ) : currentQuestion.operation === 'rounding' ? (
+             <div style={{ fontSize: '32px', textAlign: 'center', lineHeight: '1.5' }}>
+               Round <span style={{ fontWeight: 'bold', color: '#FF8C00' }}>{currentQuestion.operandA}</span> to the nearest {currentQuestion.roundingTarget}
+             </div>
+          ) : currentQuestion.operation === 'even-or-odd' || currentQuestion.operation === 'prime-or-not' ? (
+             <div style={{ fontSize: '64px', fontFamily: 'monospace', textAlign: 'center', fontWeight: 'bold' }}>
+               {currentQuestion.operandA}
+             </div>
+          ) : isSingleDigitCompare ? (
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: '1fr auto 1fr', 
+              gridTemplateRows: '1fr auto', 
+              gap: '16px 24px',
+              justifyItems: 'center',
+              alignItems: 'end'
+            }}>
+              {/* Icons Row */}
+              <div style={{ gridColumn: 1, gridRow: 1 }}>
+                {renderIconGrid(currentQuestion.operandA, compareIconRef.current)}
+              </div>
+              
+              {/* Answer Line spans both rows, centered vertically */}
+              <div style={{ 
+                gridColumn: 2,
+                gridRow: '1 / span 2', 
+                display: 'flex', 
+                alignItems: 'center', 
+                fontSize: '48px', 
+                color: '#FF8C00', 
+                fontWeight: 'bold', 
+                letterSpacing: '4px' 
+              }}>
+                ___
+              </div>
+              
+              <div style={{ gridColumn: 3, gridRow: 1 }}>
+                {renderIconGrid(currentQuestion.operandB, compareIconRef.current)}
+              </div>
+
+              {/* Numbers Row */}
+              <div style={{ gridColumn: 1, gridRow: 2, fontSize: '24px', fontFamily: 'monospace', backgroundColor: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '8px' }}>
+                {currentQuestion.operandA}
+              </div>
+              
+              <div style={{ gridColumn: 3, gridRow: 2, fontSize: '24px', fontFamily: 'monospace', backgroundColor: 'rgba(255,255,255,0.1)', padding: '4px 12px', borderRadius: '8px' }}>
+                {currentQuestion.operandB}
+              </div>
+            </div>
+          ) : currentQuestion.operation === 'greater-than-lesser-than' ? (
             <div style={{
               fontSize: '48px',
               fontFamily: 'monospace',
@@ -297,6 +449,26 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
                   <span style={{ color: '#FF8C00' }}>__</span>
                 </>
               )}
+            </div>
+          ) : currentQuestion.operation === 'addition' || currentQuestion.operation === 'subtraction' ? (
+            /* Stacked Layout for Addition and Subtraction */
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{
+                fontSize: '64px',
+                fontFamily: 'monospace',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                lineHeight: '1.2'
+              }}>
+                <div>{currentQuestion.operandA}</div>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <span>{getOperationSymbol(currentQuestion.operation)}</span>
+                  <span>{currentQuestion.operandB}</span>
+                </div>
+                <hr style={{ width: '100%', border: 'none', borderTop: '4px solid #FFFFFF', margin: '8px 0' }} />
+                <div style={{ color: '#FF8C00' }}>?</div>
+              </div>
             </div>
           ) : (
             /* Default: A op B = ? */
@@ -454,6 +626,7 @@ export const MarathonInterface: React.FC<MarathonInterfaceProps> = ({ config, on
         display: 'flex',
         gap: '8px',
         marginTop: 'auto',
+        marginBottom: '80px',
         paddingTop: '24px'
       }}>
         {!isPaused ? (

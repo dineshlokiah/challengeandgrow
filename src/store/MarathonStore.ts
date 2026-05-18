@@ -3,7 +3,7 @@
  * Validates: Requirements 11.1, 11.2, 11.4, 11.5
  */
 
-import { MarathonConfig, MarathonResults, MarathonState } from '../types';
+import { MarathonConfig, MarathonResults, MarathonState, SavedSession } from '../types';
 
 type AppScreen = 'configuration' | 'marathon' | 'results';
 
@@ -12,6 +12,7 @@ interface AppState {
   marathonConfig: MarathonConfig | null;
   marathonState: MarathonState | null;
   marathonResults: MarathonResults | null;
+  savedSession: SavedSession | null;
 }
 
 /**
@@ -24,6 +25,7 @@ class MarathonStore {
     marathonConfig: null,
     marathonState: null,
     marathonResults: null,
+    savedSession: null,
   };
 
   private listeners: Set<() => void> = new Set();
@@ -59,6 +61,7 @@ class MarathonStore {
       marathonConfig: config,
       marathonState: null, // Will be initialized by MarathonInterface
       marathonResults: null,
+      savedSession: null,
     };
     this.notify();
   }
@@ -83,6 +86,7 @@ class MarathonStore {
       ...this.state,
       currentScreen: 'results',
       marathonResults: results,
+      savedSession: null,
     };
     this.notify();
   }
@@ -96,6 +100,7 @@ class MarathonStore {
       marathonConfig: null,
       marathonState: null,
       marathonResults: null,
+      savedSession: null,
     };
     this.notify();
   }
@@ -119,6 +124,27 @@ class MarathonStore {
    */
   getMarathonResults(): MarathonResults | null {
     return this.state.marathonResults;
+  }
+
+  /**
+   * Resume marathon from a saved session
+   */
+  resumeMarathon(session: SavedSession): void {
+    this.state = {
+      currentScreen: 'marathon',
+      marathonConfig: session.config,
+      marathonState: null,
+      marathonResults: null,
+      savedSession: session,
+    };
+    this.notify();
+  }
+
+  /**
+   * Get saved session
+   */
+  getSavedSession(): SavedSession | null {
+    return this.state.savedSession;
   }
 }
 

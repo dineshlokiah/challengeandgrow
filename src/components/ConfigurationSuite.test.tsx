@@ -1,229 +1,173 @@
 /**
- * Unit tests for ConfigurationSuite component
- * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 1.6
+ * Unit tests for the redesigned ConfigurationSuite component
+ * Validates: Requirements 3.1, 3.8, 4.1, 4.5, 5.1, 6.1, 6.2, 6.6
  */
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import ConfigurationSuite from './ConfigurationSuite';
-import { MarathonConfig } from '../types';
 
-describe('ConfigurationSuite', () => {
-  describe('Parameter Selection Rendering', () => {
-    it('should render all subject options', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
+const noop = vi.fn();
 
-      expect(screen.getByText('Addition')).toBeInTheDocument();
-      expect(screen.getByText('Subtraction')).toBeInTheDocument();
-      expect(screen.getByText('Multiplication')).toBeInTheDocument();
-      expect(screen.getByText('Division')).toBeInTheDocument();
+function getSettingsCard(heading: string): HTMLElement {
+  const h2 = screen.getByText(heading, { selector: 'h2' });
+  return h2.parentElement as HTMLElement;
+}
+
+function clickInCard(heading: string, buttonText: string) {
+  const card = getSettingsCard(heading);
+  fireEvent.click(within(card).getByText(buttonText));
+}
+
+function completeWizardThroughAnswerMode() {
+  fireEvent.click(screen.getByText('Addition'));
+  clickInCard('Number A Digits', '2');
+  clickInCard('Number B Digits', '2');
+  clickInCard('Number of Questions', '20');
+  clickInCard('Time Per Question', '30s');
+  clickInCard('Answer Mode', 'Multiple Choice');
+}
+
+describe('ConfigurationSuite redesigned UI', () => {
+
+  describe('Test 1 Initial render only subject section visible', () => {
+    it('shows the Subject section on first render', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      expect(screen.getByText('Subject')).toBeInTheDocument();
     });
 
-    it('should render digit count options for Number A', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      expect(screen.getByText('Number A Digits')).toBeInTheDocument();
-      const digitButtons = screen.getAllByText(/^[1-4]$/);
-      expect(digitButtons.length).toBeGreaterThanOrEqual(4);
-    });
-
-    it('should render digit count options for Number B', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      expect(screen.getByText('Number B Digits')).toBeInTheDocument();
-    });
-
-    it('should render volume options', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      expect(screen.getByText('Questions')).toBeInTheDocument();
-      expect(screen.getByText('10')).toBeInTheDocument();
-      expect(screen.getByText('20')).toBeInTheDocument();
-      expect(screen.getByText('50')).toBeInTheDocument();
-      expect(screen.getByText('∞')).toBeInTheDocument();
-    });
-
-    it('should render speed limit options', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      expect(screen.getByText('Time Per Question')).toBeInTheDocument();
-      expect(screen.getByText('10s')).toBeInTheDocument();
-      expect(screen.getByText('30s')).toBeInTheDocument();
-      expect(screen.getByText('60s')).toBeInTheDocument();
+    it('hides all non-subject SettingsCard sections on first render', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      const hiddenHeadings = [
+        'Number A Digits', 'Number B Digits', 'Number of Questions',
+        'Time Per Question', 'Answer Mode', 'Decimal Numbers',
+      ];
+      for (const heading of hiddenHeadings) {
+        expect(getSettingsCard(heading).style.display).toBe('none');
+      }
     });
   });
 
-  describe('Start Button Enable/Disable Logic', () => {
-    it('should disable start button when no parameters are selected', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      const startButton = screen.getByText('Start Marathon');
-      expect(startButton).toBeDisabled();
-    });
-
-    it('should disable start button when only subject is selected', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      fireEvent.click(screen.getByText('Addition'));
-      const startButton = screen.getByText('Start Marathon');
-      expect(startButton).toBeDisabled();
-    });
-
-    it('should disable start button when subject and digit counts are selected but volume and speed are missing', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      fireEvent.click(screen.getByText('Addition'));
-      const digitButtons = screen.getAllByText('1');
-      fireEvent.click(digitButtons[0]); // Number A
-      fireEvent.click(digitButtons[1]); // Number B
-
-      const startButton = screen.getByText('Start Marathon');
-      expect(startButton).toBeDisabled();
-    });
-
-    it('should enable start button when all parameters are selected', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      // Select all parameters
-      fireEvent.click(screen.getByText('Addition'));
-      const digitButtons = screen.getAllByText('2');
-      fireEvent.click(digitButtons[0]); // Number A
-      fireEvent.click(digitButtons[1]); // Number B
-      fireEvent.click(screen.getByText('20'));
-      fireEvent.click(screen.getByText('30s'));
-
-      const startButton = screen.getByText('Start Marathon');
-      expect(startButton).not.toBeDisabled();
-    });
-  });
-
-  describe('Configuration Submission', () => {
-    it('should call onStartMarathon with correct config when all parameters are selected', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      // Select all parameters
-      fireEvent.click(screen.getByText('Multiplication'));
-      const digitButtons = screen.getAllByText('3');
-      fireEvent.click(digitButtons[0]); // Number A
-      fireEvent.click(digitButtons[1]); // Number B
-      fireEvent.click(screen.getByText('50'));
-      fireEvent.click(screen.getByText('60s'));
-
-      const startButton = screen.getByText('Start Marathon');
-      fireEvent.click(startButton);
-
-      expect(mockCallback).toHaveBeenCalledTimes(1);
-      expect(mockCallback).toHaveBeenCalledWith({
-        subject: 'multiplication',
-        digitCountA: 3,
-        digitCountB: 3,
-        volume: 50,
-        speedLimit: 60,
-      } as MarathonConfig);
-    });
-
-    it('should handle endless volume selection', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      // Select all parameters with endless volume
-      fireEvent.click(screen.getByText('Division'));
-      const digitButtons = screen.getAllByText('4');
-      fireEvent.click(digitButtons[0]); // Number A
-      fireEvent.click(digitButtons[1]); // Number B
-      fireEvent.click(screen.getByText('∞'));
-      fireEvent.click(screen.getByText('10s'));
-
-      const startButton = screen.getByText('Start Marathon');
-      fireEvent.click(startButton);
-
-      expect(mockCallback).toHaveBeenCalledWith({
-        subject: 'division',
-        digitCountA: 4,
-        digitCountB: 4,
-        volume: 'endless',
-        speedLimit: 10,
-      } as MarathonConfig);
-    });
-  });
-
-  describe('Visual Design System', () => {
-    it('should apply selected state styling when option is clicked', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      const additionButton = screen.getByText('Addition').closest('button');
-      fireEvent.click(additionButton!);
-
-      expect(additionButton).toHaveAttribute('aria-pressed', 'true');
-    });
-
-    it('should have minimum button dimensions (44x44px)', () => {
-      const mockCallback = vi.fn();
-      const { container } = render(<ConfigurationSuite onStartMarathon={mockCallback} />);
-
-      const buttons = container.querySelectorAll('button');
-      buttons.forEach((button) => {
-        const styles = window.getComputedStyle(button);
-        const minWidth = parseInt(styles.minWidth);
-        const minHeight = parseInt(styles.minHeight);
-        
-        expect(minWidth).toBeGreaterThanOrEqual(44);
-        expect(minHeight).toBeGreaterThanOrEqual(44);
+  describe('Test 2 Sticky bar has position fixed and bottom 0', () => {
+    it('renders the sticky footer with position fixed and bottom 0', () => {
+      const { container } = render(<ConfigurationSuite onStartMarathon={noop} />);
+      const fixedBottomDivs = Array.from(container.querySelectorAll('div[style]')).filter((el) => {
+        const s = (el as HTMLElement).style;
+        return s.position === 'fixed' && s.bottom === '0px';
       });
+      expect(fixedBottomDivs.length).toBeGreaterThan(0);
     });
   });
 
-  describe('Parameter Selection State', () => {
-    it('should allow changing subject selection', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
+  describe('Test 3 Content area has paddingBottom at least 52px', () => {
+    it('applies paddingBottom of at least 52px to the scrollable container', () => {
+      const { container } = render(<ConfigurationSuite onStartMarathon={noop} />);
+      const outerDiv = container.firstElementChild as HTMLElement;
+      expect(parseInt(outerDiv.style.paddingBottom, 10)).toBeGreaterThanOrEqual(52);
+    });
+  });
 
-      const additionButton = screen.getByText('Addition').closest('button');
-      const subtractionButton = screen.getByText('Subtraction').closest('button');
-
-      fireEvent.click(additionButton!);
-      expect(additionButton).toHaveAttribute('aria-pressed', 'true');
-
-      fireEvent.click(subtractionButton!);
-      expect(subtractionButton).toHaveAttribute('aria-pressed', 'true');
-      expect(additionButton).toHaveAttribute('aria-pressed', 'false');
+  describe('Test 4 Decimal section renders a toggle element not two buttons', () => {
+    it('renders a role switch element inside the Decimal Numbers card', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      completeWizardThroughAnswerMode();
+      expect(screen.getByRole('switch')).toBeInTheDocument();
     });
 
-    it('should maintain independent state for Number A and Number B digit counts', () => {
-      const mockCallback = vi.fn();
-      render(<ConfigurationSuite onStartMarathon={mockCallback} />);
+    it('renders exactly one switch element for the decimal choice', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      completeWizardThroughAnswerMode();
+      expect(screen.getAllByRole('switch')).toHaveLength(1);
+    });
+  });
 
-      // Select different digit counts for A and B
+  describe('Test 5 Toggle labels Whole Numbers and With Decimals are both present', () => {
+    it('shows Whole Numbers label when Decimal Numbers card is visible', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      completeWizardThroughAnswerMode();
+      expect(screen.getByText('Whole Numbers')).toBeInTheDocument();
+    });
+
+    it('shows With Decimals label when Decimal Numbers card is visible', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      completeWizardThroughAnswerMode();
+      expect(screen.getByText('With Decimals')).toBeInTheDocument();
+    });
+  });
+
+  describe('Test 6 Toggle thumb has a CSS transition including 200ms', () => {
+    it('applies a transition with 200ms to the toggle thumb div', () => {
+      const { container } = render(<ConfigurationSuite onStartMarathon={noop} />);
+      completeWizardThroughAnswerMode();
+      const allDivs = Array.from(container.querySelectorAll('div[style]')) as HTMLElement[];
+      const thumbDiv = allDivs.find((el) => el.style.transition.includes('200ms'));
+      expect(thumbDiv).toBeDefined();
+    });
+  });
+
+  describe('Test 7 The 6 non-subject sections are wrapped in SettingsCard containers', () => {
+    it('renders h2 headings for all 6 non-subject SettingsCard sections', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      const expectedHeadings = [
+        'Number A Digits', 'Number B Digits', 'Number of Questions',
+        'Time Per Question', 'Answer Mode', 'Decimal Numbers',
+      ];
+      for (const heading of expectedHeadings) {
+        expect(screen.getByText(heading, { selector: 'h2' })).toBeInTheDocument();
+      }
+    });
+
+    it('renders SettingsCard headings with Fredoka One font at 16px', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      const h2 = screen.getByText('Number A Digits', { selector: 'h2' });
+      expect(h2.style.fontFamily).toContain('Fredoka One');
+      expect(h2.style.fontSize).toBe('16px');
+    });
+  });
+
+  describe('Test 8 Sticky button disabled when config incomplete enabled when complete', () => {
+    it('is disabled on initial render', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      expect(screen.getByText(/Start Marathon/)).toBeDisabled();
+    });
+
+    it('is disabled after selecting only the subject', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
       fireEvent.click(screen.getByText('Addition'));
-      const digitButtons = screen.getAllByText('2');
-      fireEvent.click(digitButtons[0]); // Number A = 2
-      
-      const digit4Buttons = screen.getAllByText('4');
-      fireEvent.click(digit4Buttons[1]); // Number B = 4
+      expect(screen.getByText(/Start Marathon/)).toBeDisabled();
+    });
 
-      fireEvent.click(screen.getByText('10'));
-      fireEvent.click(screen.getByText('30s'));
+    it('is enabled when all required fields are selected', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      completeWizardThroughAnswerMode();
+      expect(screen.getByText(/Start Marathon/)).not.toBeDisabled();
+    });
 
-      const startButton = screen.getByText('Start Marathon');
-      fireEvent.click(startButton);
-
-      expect(mockCallback).toHaveBeenCalledWith({
-        subject: 'addition',
-        digitCountA: 2,
-        digitCountB: 4,
-        volume: 10,
-        speedLimit: 30,
-      } as MarathonConfig);
+    it('calls onStartMarathon when clicked in the enabled state', () => {
+      const mockStart = vi.fn();
+      render(<ConfigurationSuite onStartMarathon={mockStart} />);
+      completeWizardThroughAnswerMode();
+      fireEvent.click(screen.getByText(/Start Marathon/));
+      expect(mockStart).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('Test 9 Changing an already-selected subject does not hide downstream sections', () => {
+    it('keeps downstream SettingsCards visible after subject change', () => {
+      render(<ConfigurationSuite onStartMarathon={noop} />);
+      completeWizardThroughAnswerMode();
+
+      expect(getSettingsCard('Decimal Numbers').style.display).not.toBe('none');
+
+      fireEvent.click(screen.getByText('Subtraction'));
+
+      const headingsToCheck = [
+        'Number A Digits', 'Number B Digits', 'Number of Questions',
+        'Time Per Question', 'Answer Mode', 'Decimal Numbers',
+      ];
+      for (const heading of headingsToCheck) {
+        expect(getSettingsCard(heading).style.display).not.toBe('none');
+      }
+    });
+  });
+
 });

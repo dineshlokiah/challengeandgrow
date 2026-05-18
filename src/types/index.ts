@@ -12,7 +12,13 @@ export type Subject =
   | 'multiplication'
   | 'division'
   | 'greater-than-lesser-than'
-  | 'fill-the-missing-number';
+  | 'fill-the-missing-number'
+  | 'counting'
+  | 'number-bonds'
+  | 'skip-counting'
+  | 'rounding'
+  | 'even-or-odd'
+  | 'prime-or-not';
 
 /**
  * How the player submits answers
@@ -39,11 +45,13 @@ export interface Question {
   operandA: number;
   operandB: number;
   operation: Subject;
-  correctAnswer: number | '>' | '<';
+  correctAnswer: number | string;
   questionNumber: number; // 1-indexed
   missingPosition?: 'operandA' | 'operandB' | 'result'; // fill-the-missing-number only
   baseOperation?: 'addition' | 'subtraction' | 'multiplication' | 'division'; // fill-the-missing-number underlying op
-  choices?: Array<number | '>' | '<'>; // multiple-choice only, length 4 (or 2 for GT/LT)
+  choices?: Array<number | string>; // multiple-choice only, length 4 (or 2 for GT/LT)
+  sequence?: Array<number | string>; // skip-counting
+  roundingTarget?: 10 | 100; // rounding
 }
 
 /**
@@ -91,4 +99,15 @@ export interface TimerState {
   remainingTime: number; // seconds
   isExpired: boolean;
   visualState: 'active' | 'expired';
+}
+
+/**
+ * Saved session data for localStorage persistence
+ */
+export interface SavedSession {
+  config: MarathonConfig;
+  questionHistory: QuestionResult[];
+  currentQuestionIndex: number;
+  currentScore: number;
+  savedAt: number; // Unix timestamp in milliseconds
 }
